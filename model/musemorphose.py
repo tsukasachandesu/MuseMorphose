@@ -39,9 +39,7 @@ class MuseMorphose(nn.Module):
     dec_n_layer, dec_n_head, dec_d_model, dec_d_ff,
     d_vae_latent, d_embed, n_token,
     enc_dropout=0.1, enc_activation='relu',
-    dec_dropout=0.1, dec_activation='relu',
-    d_rfreq_emb=32, d_polyph_emb=32,
-    n_rfreq_cls=8, n_polyph_cls=8,
+    dec_dropout=0.1, dec_activation='relu'
   ):
     super(MuseMorphose, self).__init__()
     self.enc_n_layer = enc_n_layer
@@ -77,7 +75,6 @@ class MuseMorphose(nn.Module):
     self.emb_dropout = nn.Dropout(self.enc_dropout)
     self.apply(weights_init)
     
-
   def reparameterize(self, mu, logvar, sampling_var=1.):
     std = torch.exp(0.5 * logvar).to(mu.device)
     eps = torch.zeros_like(std).to(mu.device)
@@ -108,11 +105,9 @@ class MuseMorphose(nn.Module):
 
     return out
 
-
   def forward(self, enc_inp, dec_inp, dec_inp_bar_pos, padding_mask=None):
     enc_bt_size, enc_n_bars = enc_inp.size(1), enc_inp.size(2)
     enc_token_emb = self.token_emb(enc_inp)
-    
     dec_token_emb = self.token_emb(dec_inp)
 
     enc_token_emb = enc_token_emb.reshape(
