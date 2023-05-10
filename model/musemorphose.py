@@ -78,22 +78,19 @@ class MuseMorphose(nn.Module):
     self.apply(weights_init)
     
 
-  def reparameterize(self, mu, logvar, use_sampling=True, sampling_var=1.):
+  def reparameterize(self, mu, logvar, sampling_var=1.):
     std = torch.exp(0.5 * logvar).to(mu.device)
-    if use_sampling:
-      eps = torch.randn_like(std).to(mu.device) * sampling_var
-    else:
-      eps = torch.zeros_like(std).to(mu.device)
+    eps = torch.zeros_like(std).to(mu.device)
 
     return eps * std + mu
 
-  def get_sampled_latent(self, inp, padding_mask=None, use_sampling=False, sampling_var=0.):
+  def get_sampled_latent(self, inp, padding_mask=None, sampling_var=0.):
     token_emb = self.token_emb(inp)
     enc_inp = self.emb_dropout(token_emb) + self.pe(inp.size(0))
 
     _, mu, logvar = self.encoder(enc_inp, padding_mask=padding_mask)
     mu, logvar = mu.reshape(-1, mu.size(-1)), logvar.reshape(-1, mu.size(-1))
-    vae_latent = self.reparameterize(mu, logvar, use_sampling=use_sampling, sampling_var=sampling_var)
+    vae_latent = self.reparameterize(mu, logvar, sampling_var=sampling_var)
 
     return vae_latent
 
@@ -112,7 +109,7 @@ class MuseMorphose(nn.Module):
     return out
 
 
-  def forward(self, enc_inp, dec_inp, dec_inp_bar_pos, rfreq_cls=None, polyph_cls=None, padding_mask=None):
+  def forward(self, enc_inp, dec_inp, dec_inp_bar_pos, padding_mask=None):
     enc_bt_size, enc_n_bars = enc_inp.size(1), enc_inp.size(2)
     enc_token_emb = self.token_emb(enc_inp)
     
