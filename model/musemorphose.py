@@ -7,7 +7,7 @@ from transformer_helpers import (
 )
 
 class VAETransformerDecoder(nn.Module):
-  def __init__(self, n_layer, n_head, d_model, d_ff, d_seg_emb, dropout=0.1, activation='relu', cond_mode='in-attn'):
+  def __init__(self, n_layer, n_head, d_model, d_ff, d_seg_emb, dropout=0.1, activation='relu'):
     super(VAETransformerDecoder, self).__init__()
     self.n_layer = n_layer
     self.n_head = n_head
@@ -18,11 +18,7 @@ class VAETransformerDecoder(nn.Module):
     self.activation = activation
     self.cond_mode = cond_mode
 
-    if cond_mode == 'in-attn':
-      self.seg_emb_proj = nn.Linear(d_seg_emb, d_model, bias=False)
-    elif cond_mode == 'pre-attn':
-      self.seg_emb_proj = nn.Linear(d_seg_emb + d_model, d_model, bias=False)
-
+    self.seg_emb_proj = nn.Linear(d_seg_emb, d_model, bias=False)
     self.decoder_layers = nn.ModuleList()
     for i in range(n_layer):
       self.decoder_layers.append(
@@ -30,21 +26,11 @@ class VAETransformerDecoder(nn.Module):
       )
 
   def forward(self, x, seg_emb):
-    if not hasattr(self, 'cond_mode'):
-      self.cond_mode = 'in-attn'
     attn_mask = generate_causal_mask(x.size(0)).to(x.device)
-    # print (attn_mask.size())
-
-    if self.cond_mode == 'in-attn':
-      seg_emb = self.seg_emb_proj(seg_emb)
-    elif self.cond_mode == 'pre-attn':
-      x = torch.cat([x, seg_emb], dim=-1)
-      x = self.seg_emb_proj(x)
-
+    seg_emb = self.seg_emb_proj(seg_emb)
     out = x
     for i in range(self.n_layer):
-      if self.cond_mode == 'in-attn':
-        out += seg_emb
+      out += seg_emb
       out = self.decoder_layers[i](out, src_mask=attn_mask)
 
     return out
@@ -57,8 +43,7 @@ class MuseMorphose(nn.Module):
     dec_dropout=0.1, dec_activation='relu',
     d_rfreq_emb=32, d_polyph_emb=32,
     n_rfreq_cls=8, n_polyph_cls=8,
-    is_training=True, use_attr_cls=True,
-    cond_mode='in-attn'
+    is_training=True
   ):
     super(MuseMorphose, self).__init__()
     self.enc_n_layer = enc_n_layer
@@ -79,7 +64,6 @@ class MuseMorphose(nn.Module):
     self.n_token = n_token
     self.is_training = is_training
 
-    self.cond_mode = cond_mode
     self.token_emb = TokenEmbedding(n_token, d_embed, enc_d_model)
     self.d_embed = d_embed
     self.pe = PositionalEncoding(d_embed)
@@ -88,28 +72,10 @@ class MuseMorphose(nn.Module):
       enc_n_layer, enc_n_head, enc_d_model, enc_d_ff, d_vae_latent, enc_dropout, enc_activation
     )
 
-    self.use_attr_cls = use_attr_cls
-    if use_attr_cls:
-      self.decoder = VAETransformerDecoder(
-        dec_n_layer, dec_n_head, dec_d_model, dec_d_ff, d_vae_latent + d_polyph_emb + d_rfreq_emb,
-        dropout=dec_dropout, activation=dec_activation,
-        cond_mode=cond_mode
-      )
-    else:
-      self.decoder = VAETransformerDecoder(
-        dec_n_layer, dec_n_head, dec_d_model, dec_d_ff, d_vae_latent,
-        dropout=dec_dropout, activation=dec_activation,
-        cond_mode=cond_mode
-      )
-
-    if use_attr_cls:
-      self.d_rfreq_emb = d_rfreq_emb
-      self.d_polyph_emb = d_polyph_emb
-      self.rfreq_attr_emb = TokenEmbedding(n_rfreq_cls, d_rfreq_emb, d_rfreq_emb)
-      self.polyph_attr_emb = TokenEmbedding(n_polyph_cls, d_polyph_emb, d_polyph_emb)
-    else:
-      self.rfreq_attr_emb = None
-      self.polyph_attr_emb = None
+    self.decoder = VAETransformerDecoder(
+      dec_n_layer, dec_n_head, dec_d_model, dec_d_ff, d_vae_latent,
+      dropout=dec_dropout, activation=dec_activation,
+    )
 
     self.emb_dropout = nn.Dropout(self.enc_dropout)
     self.apply(weights_init)
